@@ -1,0 +1,338 @@
+---
+title: "Homework 4"
+author: "Rolando Santos"
+date: "2023-10-30"
+output: pdf_document
+---
+
+### Question 1: Use the prostate data with lpsa as the response and the other variables as predictors. Implement the following variable selection methods to determine the “best” model:
+
+```{r}
+prostate <- read.csv("prostate.csv")
+head(prostate)
+```
+
+
+### a. Backward elimination (0.05 cutoff)
+
+```{r}
+lm.model <- lm(lpsa ~ ., data = prostate)
+summary(lm.model)
+```
+We can see that the following parameters are not significant at the 5% level: lcp, gleason, pgg45, age and lbph (age and lbph are significant at the 10% level).
+
+```{r}
+#Removing gleason
+lm.model <- update(lm.model, .~. -gleason)
+summary(lm.model)
+
+#Removing lcp
+lm.model <- update(lm.model, .~. -lcp)
+summary(lm.model)
+
+#Removing pgg45
+lm.model <- update(lm.model, .~. -pgg45)
+summary(lm.model)
+
+#Removing age
+lm.model <- update(lm.model, .~. -age)
+summary(lm.model)
+
+#Removing lbph
+lm.model <- update(lm.model, .~. -lbph)
+summary(lm.model)
+```
+After removing all insignifcant predictors, we are left with lcavol, lweight and svi as the remaining predictors.
+
+### b. AIC
+
+```{r}
+lm.model <- lm(lpsa ~ ., data = prostate)
+step(lm.model)
+```
+The AIC method eliminates gleason, lcp and pgg45 in that order, however keeps age and svi, so the model ends with the following parameters: age, lbph, lweight, svi and lcavol.
+
+```{r}
+lm.model <- update(lm.model, .~. -gleason)
+lm.model <- update(lm.model, .~. -lcp)
+lm.model <- update(lm.model, .~. -pgg45)
+summary(lm.model)
+```
+
+### c. Do these model selection methods give you the same result? If not, do you think it is an issue that they are different? Give your insight.
+
+The AIC model has more predictors included compared to the Backwards elimination model. The AIC model chose to keep a few of the predictors that are not significant at the 5% level. There is no issue if the models vary, if we do end up with different models then we need to start looking at other aspects to start comparing which of the two models can be considered better i.e. looking at the Adjusted $R^2$. We can see that the Adjusted $R^2$ of the AIC model is slightly higher with a value of 0.6245 compared the the Adjusted $R^2$ of the backwards elimination model with a value of 0.6144.
+
+### Question 2: The aatemp data come from the U.S. Historical Climatology Network. They are the annual mean temperatures (in degrees F) in Ann Arbor, Michigan going back about 150 years. Download this dataset from Sakai and answer the following questions.
+
+```{r}
+aatemp <- read.csv("aatemp.csv")
+head(aatemp)
+```
+
+### a. Fit a linear model of temp~year. Do you think there is a linear trend? (Hint: check plot, parameters, and model goodness of fit)
+
+```{r}
+lm.model <- lm(temp ~ year, data = aatemp)
+summary(lm.model)
+```
+```{r}
+plot(lm.model$residuals ~ lm.model$fitted.values, xlab = "Fitted Values",
+     ylab = "Residuals", main = "Residuals vs. Fitted Values")
+abline(h=0 ,col='red', lwd=2)
+```
+```{r}
+qqnorm(lm.model$residuals)
+qqline(lm.model$residuals)
+```
+
+```{r}
+plot(temp ~ year, data = aatemp)
+abline(coefficients(lm.model))
+```
+
+From the Residuals vs. Fitted plot we can see that the trend is linear (points are scattered randomly around the center line), and the q-q plot shows that the residuals do follow the line indicating a linear trend as well. We can also see that data on temp vs. year also follows a linear trend.
+
+### b. Observations in successive years may be correlated. Fit a model that estimates this correlation. Does this change your opinion about the trend?
+
+```{r}
+n <- dim(aatemp)[1]
+plot(tail(lm.model$residuals, n-1) ~ head(lm.model$residuals, n-1), xlab=
+expression(hat(epsilon)[i]),ylab=expression(hat(epsilon)[i+1]))
+abline(h = 0, col = 'red', lwd = 2)
+```
+
+```{r}
+plot(lm.model$residuals ~ year, na.omit(aatemp), ylab = "Residuals")
+abline(h = 0, col = 'red', lwd = 2)
+```
+
+```{r}
+cor(tail(lm.model$residuals, n-1), head(lm.model$residuals, n-1))
+```
+
+From the correlation value show us that there is a positive serial correlation, however it is small and difficult to point out from viewing the plots. 
+
+### c. Fit a polynomial model with degree 5. Plot your fitted model on top of the data.
+
+```{r}
+#Using poly() here because using year + I(year^2) + ... + I(year^5) causes 
+#the I(year^5) to return as NA due to perfect collinearity.
+lm.model.poly5 <- lm(temp ~ poly(year, 5), data = aatemp)
+summary(lm.model.poly5)
+
+plot(temp ~ year, data = aatemp)
+lines(aatemp$year, fitted(lm.model.poly5), col = "red")
+```
+
+```{r}
+#Here we see that I(year^5) does not have any coefficients due to lm() preventing
+#perfectly collinear predictors from having coefficients
+lm.model.poly5 <- lm(temp ~ year + I(year^2) + I(year^3) + I(year^4) + I(year^5), 
+                     data = aatemp)
+summary(lm.model.poly5)
+
+plot(temp ~ year, data = aatemp)
+lines(aatemp$year, fitted(lm.model.poly5), col = "red")
+```
+
+
+### d. Suppose someone claims that the temperature trend was different before and after 1930. Fit a segmented regression model to check this claim.
+
+```{r}
+plot(temp ~ year, data = aatemp)
+abline(v=1930, lty=5)
+
+lm.model1 <- lm(temp ~ year, data = aatemp, subset = (year < 1930))
+lm.model2 <- lm(temp ~ year, data = aatemp, subset = (year > 1930))
+
+segments(x0 = 1850, y0 = lm.model1$coefficients[1]+lm.model1$coefficients[2]*1850, 
+         x1 = 1930, y1 = lm.model1$coefficients[1]+lm.model1$coefficients[2]*1930)
+segments(x0 = 1930, y0 = lm.model2$coefficients[1]+lm.model2$coefficients[2]*1930, 
+         x1 = 2000, y1 = lm.model2$coefficients[1]+lm.model2$coefficients[2]*2000)
+```
+
+```{r}
+bl <- function(x){
+  ifelse(x<1930, 1930-x, 0)
+}
+
+br <- function(x){
+  ifelse(x>1930, x-1930, 0)
+}
+# fit a segmented model
+lm.seg <- lm(temp ~ bl(year) +br (year), data = aatemp)
+```
+
+```{r}
+plot(temp ~ year, data = aatemp)
+abline(v=1930, lty=5)
+
+segments(x0 = 1850, y0 = lm.model1$coefficients[1]+lm.model1$coefficients[2]*1850, 
+         x1 = 1930, y1 = lm.model1$coefficients[1]+lm.model1$coefficients[2]*1930)
+segments(x0 = 1930, y0 = lm.model2$coefficients[1]+lm.model2$coefficients[2]*1930, 
+         x1 = 2000, y1 = lm.model2$coefficients[1]+lm.model2$coefficients[2]*2000)
+
+x <- seq(1850, 2000, by=1)
+y <- lm.seg$coefficients[1]+lm.seg$coefficients[2]*bl(x)+lm.seg$coefficients[3]*br(x)
+lines(x,y,lty=2)
+
+summary(lm.seg)
+summary(lm.model1)
+summary(lm.model2)
+```
+
+
+### Question 3: The “longley” dataset includes seven social-economic variables from 1947-1962 in the US. Our goal is to explore the relationship between Employed and other variables. Download this dataset from Sakai and answer the following questions.
+
+```{r}
+longley <- read.csv("longley.csv")
+head(longley)
+```
+
+```{r}
+lm.model <- lm(Employed ~ ., data = longley)
+summary(lm.model)
+```
+
+### a. Construct a correlation matrix of six predictors in this dataset. Which predictors do you think are highly correlated? What are the potential reasons for those high correlations?
+
+```{r}
+round(cor(longley[,-7]), 2)
+```
+We can see between both GNPs, Population and Year there are extremely high correlations.
+
+### b. Regress each predictor on others to examine the collinearity. Do you have same conclusion as in (a)?
+
+```{r}
+X <- model.matrix(lm.model)[,-1]
+for(i in 1:dim(X)[2]){
+  r2 <- summary(lm(X[,i]~X[,-i]))$r.squared
+  cat(colnames(X)[i], '\t', r2, '\n')
+}
+```
+We can see that both GNPs, population, year and now even Unemployed have very high $R^2$ values indicating collinearity.
+
+### c. Try to remove some highly correlated predictors. Compare the full model and the smaller model. Do you think the smaller model is better? Give you reason.
+
+```{r}
+lm.model.small <- lm(Employed ~ GNP + Armed.Forces + Unemployed + Year, data = longley)
+summary(lm.model.small)
+```
+
+In the final model I've decided to remove GNP.deflator and Population. I decided to keep Year because it was significant in the original model. The smaller model appears to be the better choice. We can see that GNP is now significant, Year is now significant at the 0.1% level and the adjusted $R^2$ has improved slightly. The standard deviations were not high in the original model and are not high in the smaller model either.
+
+### Question 4: The gala dataset contains 30 Galapagos islands and 7 variables. The relationship between the number of plant species and several geographic variables is of interest.
+
+```{r}
+gala <- read.csv("gala.csv")
+head(gala)
+```
+
+### The dataset galamiss contains the Galapagos data with missing values left in. Use two datasets to answer the following questions. 
+
+```{r}
+galamiss <- read.csv("galamiss.csv")
+head(galamiss)
+```
+
+### a. Fit a linear model using gala (the data without missing) with the number of species as the response and the five geographic predictors (without Endemics). 
+
+```{r}
+lm.model <- lm(Species ~ Area + Elevation + Nearest + Scruz + Adjacent, data = gala)
+summary(lm.model)
+```
+
+### b. In galamiss, which variable(s) includes missing value? How many missing values do we have?
+
+```{r}
+summary(galamiss)
+mean(is.na(galamiss))
+1 - mean(complete.cases(galamiss))
+```
+
+In galamiss the Elevation variable is the only one with missing values (with a total of 6 missing values). We can see that ~2.9% of all values are missing and 20% of observations having missing values.
+
+### c. Fit the same linear model to galamiss using the deletion strategy for missing values. Compare the fit to that in (a).
+
+```{r}
+lm.model.deletion <- lm(Species ~ Area + Elevation + Nearest + Scruz + Adjacent, 
+                        data = galamiss)
+summary(lm.model.deletion)
+```
+
+```{r}
+#Standard error for original model
+sqrt(diag(vcov(lm.model)))
+
+#Standard error for model with deletions
+sqrt(diag(vcov(lm.model.deletion)))
+```
+
+We can see that the deletion model is worse due to a lower adjusted $R^2$, higher p-values and higher standard errors for each predictor.
+
+### d. Use mean value imputation on galamiss and again fit the model. Compare to previous fits.
+
+```{r}
+means <- colMeans(galamiss, na.rm = TRUE)
+galamiss.impute <- galamiss
+for (i in 1:7){
+  galamiss.impute[is.na(galamiss.impute[, i]), i] <- means[i]
+}
+lm.model.mean_impute <- lm(Species ~ Area + Elevation + Nearest + Scruz + Adjacent, 
+                        data = galamiss.impute)
+summary(lm.model.mean_impute)
+```
+
+```{r}
+#Standard error for original model
+sqrt(diag(vcov(lm.model)))
+
+#Standard error for model with deletions
+sqrt(diag(vcov(lm.model.deletion)))
+
+#Standard error with mean impute
+sqrt(diag(vcov(lm.model.mean_impute)))
+```
+We can see with the mean imputes the standard error is even higher and the p-values are still high causing adjacent to be significant at the 1% level compared to the 0.1% level (similar to the simple deletion model). The adjusted $R^2$ also appears to be way worse compared to the other 2 models.
+
+### e. Use a regression-based imputation based on the other four geographic predictors to fill in the missing values in galamiss. Fit the same model and compare to previous fits. 
+
+```{r}
+galamiss.impute <- galamiss
+lm.model.impute <- lm(Elevation ~ Area + Nearest + Scruz + Adjacent,
+                          data = galamiss)
+elevation.impute <- predict(lm.model.impute, 
+                            galamiss[is.na(galamiss$Elevation),])
+galamiss.impute[is.na(galamiss.impute$Elevation),] <- elevation.impute
+lm.model.reg_impute <- lm(Species ~ Area + Elevation + Nearest + Scruz + Adjacent, 
+                        data = galamiss.impute)
+summary(lm.model.reg_impute)
+```
+
+```{r}
+#Ground Truth vs. Imputation
+gala$Elevation[is.na(galamiss$Elevation)]
+galamiss.impute$Elevation[is.na(galamiss$Elevation)]
+```
+
+```{r}
+median(galamiss$Elevation, na.rm = TRUE)
+mean(galamiss$Elevation, na.rm = TRUE)
+```
+
+```{r}
+#Standard error for original model
+sqrt(diag(vcov(lm.model)))
+
+#Standard error for model with deletions
+sqrt(diag(vcov(lm.model.deletion)))
+
+#Standard error with mean imputes
+sqrt(diag(vcov(lm.model.mean_impute)))
+
+#Standard error with regression imputes
+sqrt(diag(vcov(lm.model.reg_impute)))
+```
+
+We can see that the model with regression imputation has a much better standard error compared to the simple deletion and mean imputation models. Something to note is that the adjusted $R^2$ is higher in this final model and the predictor Nearest is significant in this model. Something else to take note of is that in the ground truth vs. imputed values we see that the imputed values are way off compared to the ground truth. after taking a look at the dataset there are a few data points that are way higher than the median and mean Elevation values which could be causing this skew.

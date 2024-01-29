@@ -1,0 +1,244 @@
+---
+title: "Homework 2"
+author: "Rolando Santos"
+date: "2023-09-28"
+output: pdf_document
+---
+
+```{r setup, include = FALSE, message = FALSE}
+library(knitr)
+library(tidyverse)
+library(readr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Question 1: Consider a simple linear regression model $y = B_{0} + B_{1}x + \epsilon$. We fit this this model based on a dataset with test score (y) and training hours (x). The fitted model is $y = 10 + 0.56x$.
+
+### a. What is the fitted value of the response variable corresponding to $x = 7$?
+
+```{r include = FALSE}
+x <- 8
+y <- 10 + 0.56 * 1
+y
+0.56 * 7
+25 - 0.5 * 6
+17 - y
+```
+
+
+$$\hat{y} = 10 + 0.56x$$
+$$\hat{y} = 10 + 0.56 * 7$$
+$$\hat{y} = 10 + 3.92$$
+$$\hat{y} = 13.92$$
+
+### b. What is the residual corresponding to the data point with $x = 7$ and $y = 17$
+
+$$e_{i} = y_{i} - \hat{y}_{i}$$
+$$e_{i} = 17 - 13.92$$
+$$e_{i} = 3.08$$
+
+### c. If the number of training hours is increased by 1, how is the expected test score affected?
+
+The slope of $\hat{y}$ changes if $x$ is increased by 1. $\hat{y}$ will increase by 0.56 (1 * 0.56).
+
+### d. Consider the data point in part b. An additional test score is to be obtained for a new observation at $x = 7$. Would the test score for the new observation necessarily be 17? Explain.
+
+It could be, but it also can not be. $x$ is a random variable from a normal distribution, the fitted value of $x$ in our model is 13.92, so it is unlikely we would see 17 as the response.
+
+### Question 2: In this question, we will use the teengamb dataset. It concers a study of teenage gambling in Britain. Each row is one teenager's records. Download this dataset from Sakai and read it into R. 
+
+### a. Fit a regression model with the expenditure on gambling as the response and sex, status, income and verbal score as predictors. Save the model output to a "model" object. Use the summary function to show the model output.
+
+```{r}
+teengamb <- read.csv("teengamb.csv")
+head(teengamb)
+teengamb$sex <- factor(teengamb$sex)
+```
+
+```{r}
+model <- lm(gamble ~ sex + status + income + verbal, data = teengamb)
+summary(model)
+```
+
+### b. What percentage of variation in the response is explained by these predictors?
+
+```{r}
+summary(model)$r.squared
+```
+
+
+$$R^2 = 0.5267234$$
+According to the $R^2$ (from the summary(model)), ~53% of the variatio in the response is explained by these predictors.
+
+### c. Use model$residuals to show the residuals. Which observation has the largest (positive) residual?
+
+```{r}
+print(paste("Observation with largest residual is:", which.max(model$residuals)))
+max(model$residuals)
+model$residuals
+```
+
+### d. Use model$fitted.values to show the fitted response. Compute the correlation of the residuals with the fitted response.
+
+```{r}
+cor(model$residuals, model$fitted.values)
+```
+
+
+### e. Compute the correlation of the residuals with the income.
+
+```{r}
+cor(model$residuals, teengamb$income)
+```
+
+### f. If all other predictors held constant, what would be the difference in predicted expenditure on gambling for a male compared to a female?
+
+From the summary we saw that the coefficient for sex is -22.11833. The dataset describes females = 1 and males = 0, so on average females spent 22.11833 less on gambling than males did.
+
+### Question 3: The dataset prostate comes from a study on 97 men with prostate cancer who were due to receive a radical prostatectomy. The description of each variable can be found at https://rafalab.github.io/pages/649/prostate.html. Download and import this dataset from Sakai, answer following questions.
+
+```{r}
+prostate <- read.csv("prostate.csv")
+head(prostate)
+```
+
+### a. Fit a regression model with lpsa as the response and lcavol as the predictor.Show the residual sum of square $RSS$ and the $R^2$ of this model (hint: check deviance function for $RSS$).
+
+```{r}
+model <- lm(lpsa ~ lcavol, data = prostate)
+summary(model)
+```
+```{r}
+summary(model)$r.squared
+```
+
+$$R^2 = 0.5394319$$
+
+```{r}
+deviance(model)
+```
+$$RSS = 58.91476$$
+
+### b. Add lweight, svi, lbph, age, lcp, pgg45 and gleason as predictors to theregression model. Show the residual sum of square ($RSS$) and the $R^2$ of this model
+
+```{r}
+model <- lm(lpsa ~ lcavol + lweight + svi + lbph + age + lcp + pgg45 + gleason, data = prostate)
+summary(model)
+```
+```{r}
+summary(model)$r.squared
+```
+
+$$R^2 = 0.6547541$$
+```{r}
+deviance(model)
+```
+$$RSS = 44.16302$$
+
+### c. Compare the $RSS$ and $R^2$ of these two models. Explain why you observe such a comparison result.
+
+From the $R^2$ increasing we can see that we achieved a model with a better fit by adding more predictors. A lower $RSS$ also shows that we start observing a model with a better fit. By adding more predictors we can better explain our response (until we start seeing penalties from the adjusted $R^2$).
+
+### d. Use the method introduced in lecture slides to manually fit the model in b. First construct a design matrix X, then a response vector y, and finally use the formula of parameter estimation. Compare the manually estimated parameters with the result from the lm function.
+
+```{r}
+y <- prostate$lpsa
+X <- model.matrix(~lcavol + lweight + svi + lbph + age + lcp + pgg45 + gleason, data = prostate)
+
+XtXi <- solve(t(X)%*%X)
+XtXi%*%t(X)%*%y
+```
+
+```{r}
+model$coefficients
+```
+
+We can see that the coefficients created manually are the same as the coefficients done using the lm() function.
+
+### Question 4: Thirty samples of cheddar cheese were analyzed for their content of acetic acid, hydrogen sulfide and lactic acid. Each sample was tasted and scored by a panel of judges and the average taste score produced. Use the cheddar dataset from Sakai to answer the following questions.
+
+```{r}
+cheddar <- read.csv("cheddar.csv")
+head(cheddar)
+```
+
+### a. Fit a regression model with taste as the response and the three chemical contents as predictors. Report the values of the regression coefficients.
+
+```{r}
+model <- lm(taste ~ Acetic + H2S + Lactic, data = cheddar)
+summary(model)
+```
+```{r}
+model$coefficients
+```
+
+### b. Compute the correlation between the fitted values and the true response. What information can you learn from this correlation?
+
+```{r}
+cor(cheddar$taste, model$fitted.values)
+```
+
+We can observe that there is a high positive correlation between the true response and the fitted values from the model.
+
+### c. How do you interpret the value of intercept in this model? Does this value make sense in this setting (tasting cheese)? 
+
+```{r}
+cheddar$taste
+```
+
+
+The value of the intercept can be viewed as the base taste value if all predictors are 0. This might not make sense in the context of the dataset because the taste of cheese having a negative score if all predictors are 0 (or close to 0) wouldn't make sense considering all taste values in the dataset are positive numbers.
+
+### Question 5: Run the following R code:
+
+### a. Explain what the code does. Use ?function_name() or Google if you do not know the meaning of any function.
+
+```{r}
+#Setting the seed means that whenever we rerun any random sampling 
+#or generate random data, the same random data will appear 
+#when rerunning the code. 
+set.seed(1234)
+
+#Generates 100 random uniform variables from a normal distribution 
+#between and including 0 and 10, the max and min values.
+x <- runif(100,0,10)
+
+#Response (y) is created using x and rnorm() generated 100 
+#random uniform variables from a normal distribution with 0 as 
+#the mean and 1 as the standard deviation. 
+y <- 3+x+x^2+rnorm(100,0,1)
+```
+
+Once you have generated x and y, fit the following two linear models:
+
+```{r}
+#Create a single linear regression model with y as the 
+#response and x as the predictor.
+lm1 <- lm(y~x)
+
+#Creates a multiple linear regression model with y as the 
+#response and x and x^2 as the predictors. I() is used to 
+#protect data type of x^2 as to not convert it into 
+#factors or other unwanted data types.
+lm2 <- lm(y~x+I(x^2))
+```
+
+### b. For both models, plot the residual versus the fitted response. Describe the pattern you observed in the plots.
+
+```{r}
+plot(lm1$fitted.values, lm1$residuals)
+abline(h=0 ,col='red', lwd=2)
+```
+
+This plot appears to suggest a non-linear relationship between the residuals and fitted values. 
+
+```{r}
+plot(lm2$fitted.values, lm2$residuals)
+abline(h=0 ,col='red', lwd=2)
+```
+
+This model suggests a more linear (in comparison to the first plot) relationship between the fitted values residuals.
+
+### c. Which model is better? Give your reason.
+
+The second model for $y = 3 + x + x^2 + \epsilon$ with predictors $x$ and $x^2$ appears as the better model. The first plot suggests that the predictor(s) provided did not have a proper fit for the response (suggested by the quadratic appearance of the plot points). The points in the second plot appear more random, which makes sense considering we use both $x$ and $x^2$ as predictors, and we know $x$ and $x^2$ are actual predictors that contribute to calculating the response $y$.

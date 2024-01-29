@@ -1,0 +1,289 @@
+---
+title: "Homework 5"
+author: "Rolando Santos"
+date: "2023-11-17"
+output: pdf_document
+---
+
+### Question 1: Let's revisit the teengamb dataset in this question
+
+```{r}
+teengamb <- read.csv("teengamb.csv")
+head(teengamb)
+```
+
+### a. Make a plot of gamble on income using a different plotting symbol depending on the sex.
+
+```{r}
+plot(
+  gamble ~ income, 
+  pch = c(0, 1)[as.factor(sex)], 
+  data = teengamb
+)
+legend(
+  "bottomright",
+  legend = c("Male", "Female"),
+  pch = c(0, 1, 2)
+)
+```
+
+### b. Fit a regression model with gamble as the response and income and sex as predictors. Display the regression fit with sex = 0 and sex = 1 separately on the plot. (Hint: use abline function)
+
+```{r}
+lm <- lm(gamble ~ income  + sex, data = teengamb)
+plot(
+  gamble ~ income, 
+  pch = c(0, 1)[as.factor(sex)],
+  data = teengamb)
+abline(lm$coefficients[1], lm$coefficients[2], col = 'blue')
+abline(lm$coefficients[1] + lm$coefficients[3], lm$coefficients[2], col = 'red')
+legend(
+  "bottomright",
+  legend = c("Male", "Female"),
+  pch = c(0, 1, 2)
+)
+```
+
+### c. Use the Matching package to find matches on sex by treating income as the confounder. Use the same parameters as in the lecture slides. How many matched pairs were found? How many cases were not matched?
+
+```{r}
+library(Matching)
+set.seed(2022)
+mm <- GenMatch(teengamb$sex, teengamb$income, ties = FALSE)
+match <- mm$matches[, 1:2]
+match
+```
+```{r}
+nrow(match)
+```
+
+```{r}
+nrow(teengamb[-c(match[, 1], match[, 2]), ])
+```
+
+There are 19 total pairs found. There are 15 cases in the dataset where no matching pair was found.
+
+### d. Compute the differences in gamble for the matched pairs. Is there a significant non-zero difference using one-sample t-test?
+
+```{r}
+pdiff <- teengamb$gamble[match[,1]] - teengamb$gamble[match[,2]]
+t.test(pdiff)
+```
+Based on the t-test p-value, there is a significant difference between gambling values among matched pairs.
+
+### e. Plot the difference in gamble against income. In what proportion of pairs did the female gamble more than the male?
+
+```{r}
+plot(pdiff ~ teengamb$income[match[,1]], 
+     xlab="Income", ylab="Female")
+abline(h=0)
+```
+
+```{r}
+mean(pdiff > 0)
+```
+
+We can see that in ~15.7% of our matched pairs, females gambled more than their male counterparts.
+
+### f. Do the conclusions from the linear model and the matched pair approach agree? Give you interpretation and insight.
+
+They do appear to agree, in our linear model we see on our regression lines that males were likelier to gamble more compared to females. In our matches we found that only ~15.7% of females gambled more than males. Our plot also showed that most points that were were below the 0 line (signifying that the difference female.gambling - male.gambling was mostly male favored).
+
+### Question 2: The infmort dataset records the infant mortality of 105 countries with their income, region, and oil export information. The infant mortality in regions of the world may be related to per capita income and whether oil is exported.
+
+```{r}
+infmort <- read.csv("infmort.csv")
+head(infmort)
+```
+
+### a. Which variables are continuous? Which are categorical variables? How many levels the categorical variable have?
+
+```{r}
+infmort$X <- as.factor(infmort$X)
+infmort$region <- as.factor(infmort$region)
+infmort$oil <- as.factor(infmort$oil)
+
+levels(infmort$X)
+levels(infmort$region)
+levels(infmort$oil)
+```
+
+From first glance at the dataset, the country(X), region and oil variables are categorical, and the income and mortality variables are numeric.
+
+The country(X) variable has 105 levels (every entry is a unique country), region has 4 levels and oil has 2 levels.
+
+### b. Regress mortality on all other variables. Interpret the model output and the meaning of estimated parameters.
+
+```{r}
+lm.model <- lm(mortality ~ X, data = infmort)
+summary(lm.model)
+```
+
+Since X is a categorical value of 105 levels, the model is trying to create dummy variable coefficients for every level, however since every level is an entry and unique, all other variables are irrelevant and we directly calculate the infant mortality based on the coefficient for the dummy variable. An example is that the intercept is 400, if we want to find the infant mortality for Algeria, we subtract -313.7 and get 86.3 which is the exact value from the dataset. This is problematic because we are depending solely on the country value and this model cannot work if we have a country outside of the dataset if we want to predict other unique data entries.
+
+### c. Regress mortality on income, region, oil, the interaction between income and region, and the interaction between income and oil. Compare this model with the one in (b). Interpret the estimated parameters.
+
+```{r}
+lm.model <- lm(mortality ~ income + region + oil, data = infmort)
+summary(lm.model)
+```
+
+```{r}
+lm.model <- lm(income ~ region, data = infmort)
+summary(lm.model)
+
+predict(lm.model, infmort)
+```
+
+```{r}
+lm.model <- lm(income ~ oil, data = infmort)
+summary(lm.model)
+```
+
+We can see when we remove country(X), we see that we have coefficients that are significant aside from income. In this model the intercept also appears to be significant. We can interpret the model as, if the region is America, Asia or Europe and depending on the income and if the country does not export oil, the rate of infant mortality decreases.
+
+In the income and region model, we see that the Europe region is significant, and that there is a large increase of income when associated with Europe. The intercept represents Africa. When the region is also America the coefficient is also significant.
+
+In the income and oil model, we see that countries that export oil, make less (-46.5) than countries that do not export oil.
+
+### d. Does the model in (c) satisfy the constant variance assumption? If not, give a transformation and refit the model. Check if the transformation solves the issue.
+
+```{r}
+plot(lm.model$fitted.values, lm.model$residuals)
+abline(h=0 ,col='red', lwd=2)
+```
+
+We can see that the model is violating constant variance, most of the points are grouped together at certain points in the model.
+
+```{r}
+lm.model.log <- lm(log(mortality) ~ log(income) + region + oil, data = infmort)
+summary(lm.model.log)
+```
+
+```{r}
+plot(lm.model.log$fitted.values, lm.model.log$residuals)
+abline(h=0 ,col='red', lwd=2)
+```
+
+After taking the log of the predictor and the log of income, we see that our fitted vs. residuals graph is showing a bit more randomness, this model is not violating constant variance.
+
+### e. Interpret the estimated parameters in (d) for region and oil variables.
+
+We can see that similarly to our non-transformed model, with all other variables constant, the infant mortality is lower in the America, Asia and Europe regions. Likewise, infant mortality increases in countries that export oil vs countries that do not.
+
+### Question 3: In this question, you will manually implement part of the maximum likelihood estimation for logistic regression. No coding is needed. Suppose we have a dataset with one predictor X and one binary response Y. The dataset $(x_i, y_i)$ is
+
+$$(4, 1)/(3,1)/(2,0)/(1,0)$$ So it only contains 4 observations. We use a logistic regression to model the relationship between X and Y
+
+$$P(Y=1) = \frac{1}{1+e^{-(\beta_0 + \beta_1X)}}$$
+
+### a. Write down the likelihood function for this dataset.
+
+$$l_1 = p^{y_1} * (1-p)^{1-y_1} = p$$ $$l_1  = \frac{1}{1+e^{-(\beta_0 + 4\beta_1)}}$$ $$l_2 = p^{y_2} * (1-p)^{1-y_2} = p$$ $$l_2 = \frac{1}{1+e^{-(\beta_0 + 3\beta_1)}}$$
+
+$$l_3 = p^{y_3} * (1-p)^{1-y_3} = 1 - p$$
+
+$$l_3 = 1 - \frac{1}{1 + e^{-(\beta_0 + 2\beta_1)}}$$ $$l_3 = \frac{e^{-(\beta_0 + 2\beta_1)}}{1+e^{-(\beta_0 + 2\beta_1)}}$$
+
+$$l_4 = p^{y_4} * (1-p)^{1-y_4} = 1 - p$$ $$l_4 = 1 - \frac{1}{1 + e^{-(\beta_0 + \beta_1)}}$$
+
+$$l_4 = \frac{e^{-(\beta_0 + \beta_1)}}{1+e^{-(\beta_0 + \beta_1)}} $$
+
+$$L = \prod_{i=1}^{n}l_i = \frac{(e^{-(\beta_0 + 2\beta_1)})(e^{-(\beta_0 + \beta_1)})}{(1+e^{-(\beta_0 + 4\beta_1)})(1+e^{-(\beta_0 + 3\beta_1)})(1+e^{-(\beta_0 + 2\beta_1)})(1+e^{-(\beta_0 + \beta_1)})} = L(\beta_0,\beta_1)$$
+
+### b. Write down the log-likihood function for this dataset.
+
+$$logL(\beta) = log[{L = \prod_{i=1}^{n}p^{y_i}(1-p)^{1-y_i}}] = \sum_{i=1}^{n}[y_ilog(p) + (1-y_i)log(1-p)]$$
+
+$$logL(\beta) = log(\frac{1}{1+e^{-(\beta_0 + 4\beta_1)}}) + log(\frac{1}{1+e^{-(\beta_0 + 3\beta_1)}}) + log(\frac{e^{-(\beta_0 + 2\beta_1)}}{1+e^{-(\beta_0 + 2\beta_1)}}) + log(\frac{e^{-(\beta_0 + \beta_1)}}{1+e^{-(\beta_0 + \beta_1)}})$$
+
+### Question 4: In this question, you will use all predictors in births dataset to predict the baby's birth weight.
+
+```{r}
+births <- read.csv("births.csv")
+head(births)
+```
+
+### a. Randomly split the whole dataset into 80% training and 20% test set. Train a linear model with all predictors using training set. Use this model to predict the weight in the test set. Calculate the prediction MSE, RMSE, and NRMSE on the test set. Use random seed 2022 before you split the data. Interpret the meaning of NRMSE.
+
+```{r}
+set.seed(2022)
+index.train <- sample(1:dim(births)[1], 0.8 * dim(births)[1])
+data.train <- births[index.train,]
+data.test <- births[-index.train,]
+
+lm.model <- lm(weight ~ ., data = data.train)
+yhat.test <- predict(lm.model, data.test)
+
+y.test <- data.test$weight
+MSE.test <- mean((y.test - yhat.test)^2)
+MSE.test
+
+RMSE.test <- sqrt(MSE.test)
+RMSE.test
+
+NRMSE.test <- RMSE.test / mean(y.test)
+NRMSE.test
+```
+
+Looking at the NRMSE, we have a \~14.2% error for our birth weight prediction.
+
+### b. Repeat the data split and model training in (a), but this time predict on the training set. Calculate the MSE, RMSE, and NRMSE on the training set. Compare with test MSE, RMSE, and RMSE. What did you find? What do you think why you have a such result?
+
+```{r}
+set.seed(2022)
+index.train <- sample(1:dim(births)[1], 0.8 * dim(births)[1])
+data.train <- births[index.train,]
+data.test <- births[-index.train,]
+
+lm.model <- lm(weight ~ ., data = data.train)
+yhat.train <- predict(lm.model, data.train)
+
+y.train <- data.train$weight
+MSE.train <- mean((y.train - yhat.train)^2)
+MSE.train
+
+RMSE.train <- sqrt(MSE.train)
+RMSE.train
+
+NRMSE.train <- RMSE.train / mean(y.train)
+NRMSE.train
+```
+
+Fitting our data on our training data, we have a \~13.7% error, the reason this is lower is because our data was trained for with this data, so its best fit for this data. Using the training data for testing model accuracy and error rate could potentially result with us having an overfitted model.
+
+### c. Conduct a 5-fold cross-validation to predict weight. Plot the test MSE for each fold. Show the average test MSE obtained from the cross-validation. Again, use 2022 as the random seed.
+
+```{r}
+set.seed(2022)
+
+index.random <- sample(1:dim(births)[1])
+
+groups <- cut(1:1992, 5, labels = FALSE)
+index.fold <- split(index.random, groups)
+
+MSEs <- c()
+
+# 5-fold cross-validation
+for(index.test in index.fold){
+  data.test <- births[index.test,]
+  data.train <- births[-index.test,]
+  
+  # fit a linear model on the training set
+  lm.model <- lm(weight ~ ., data = data.train)
+  
+  # predict on the test set
+  yhat.test <- predict(lm.model, data.test)
+  
+  # calculate test MSE
+  y.test <- data.test$weight
+  MSE.test <- mean((y.test - yhat.test)^2)
+  MSEs <- c(MSEs, MSE.test)
+}
+# plot 5 MSEs
+plot(1:5, MSEs, type='b', col='red', xlab='Fold', ylab='MSE', ylim=c(220,320))
+# Average 5 MSEs
+mean(MSEs)
+```
+
+The resulting average MSE that we end up with is 264.4943.

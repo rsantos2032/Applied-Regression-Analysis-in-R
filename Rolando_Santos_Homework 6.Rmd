@@ -1,0 +1,251 @@
+---
+title: "Homework 6"
+author: "Rolando Santos"
+date: "2023-12-09"
+output: pdf_document
+---
+
+### Question 1: We're going to use the mtcars dataset that can be found in the R package “datasets”. Import the dataset by running “library(datasets); data(mtcars)”.
+
+```{r}
+library(datasets)
+head(mtcars)
+```
+
+### a. Fit a logistic regression model with the variable am as the response and mpg and hp as predictors. What are the estimated regression coefficients from this model? How do we interpret them here?
+
+```{r}
+lmod <- glm(am ~ mpg + hp, family = binomial, data = mtcars)
+summary(lmod)
+```
+
+One unit increase of `mpg` will increase the odds of a car being automatic by a factor of $e^{1.25961} = 3.524$.
+
+One unit incrase of `hp` will increase the odds of a car being automatic by a factor of $e^{0.05504} = 1.056$.
+
+Both coefficients are significant at the 5% level.
+
+### b. What is the predicted probability that a car is automatic if it has hp = 180 and mpg = 20?
+
+```{r}
+intercept <- -33.60517 
+mpg_coef <- 1.25961
+hp_coef <- 0.05504
+
+p <- intercept + mpg_coef * 20 + hp_coef * 180
+round(1/(1+exp(-p)), 3)
+
+round(predict(lmod, list(mpg = 20, hp = 180), type = "response"), 3)
+```
+
+Using r `predict()` and manually calculating the predicted probability, we can see that with `mpg` = 20 and `hp` = 180 the probability of a car being automatic is 0.817.
+
+### c. Randomly split the data into a 80% train set and a 20% test set. Fit a logistic model on the training set and predict on the test set. What is the prediction accuracy of transmission type on the test set? (Hint: if the probability of being 1 is greater than 0.5 then set the transmission type equal to 1, otherwise, set it to 0)
+
+```{r}
+set.seed(2023)
+index.train <- sample(1:dim(mtcars)[1], 0.8 * dim(mtcars)[1])
+data.train <- mtcars[index.train,]
+data.test <- mtcars[-index.train,]
+
+lmod <- glm(am ~ mpg + hp, data = data.train, family = binomial)
+p.pred <- predict(lmod, data.test, type='response')
+
+y.pred <- ifelse(p.pred > 0.5, 1, 0)
+y.truth <- data.test$am
+acc.test <- mean(y.pred==y.truth)
+acc.test
+```
+
+The prediction accuracy for our model is 85.7%.
+
+### d. Show the confusion matrix. Calculate the true positive rate, true negative rate, and precision.
+
+```{r}
+table(y.pred, y.truth)
+```
+```{r}
+# True Positive
+TP <- intersect(which(y.truth==1), which(y.pred==1))
+# True Negative
+TN <- intersect(which(y.truth==0), which(y.pred==0))
+# False Positive
+FP <- which(y.truth[which(y.pred==1)]==0)
+# False Negative
+FN <- which(y.truth[which(y.pred==0)]==1)
+                                         
+# Precision
+prec <- length(TP) / (length(TP) + length(FP))
+prec
+
+# True Positive Rate
+TPR <- length(TP) / (length(TP) + length(FN))
+TPR
+
+# True Negative Rate
+TNR <- length(TN) / (length(TN) + length(FP))
+TNR
+```
+
+### Question 2: Use seatpos data to conduct the following analysis. Make sure you understand the meaning of each variable in this dataset.
+
+```{r}
+seatpos <- read.csv("seatpos.csv")
+head(seatpos)
+```
+
+### a. Use hipcenter as response and all other variables as predictors to fit a linear model. How you interpret this model? What is the issue of this model?
+
+```{r}
+model <- lm(hipcenter ~ ., data = seatpos)
+summary(model)
+```
+One glaring issue that we notice is that none of our coefficients are significant at any level.
+
+### b. Use cor function to check the correlation of all predictors. What predictors are highly correlated? Is there any relation between correlations and model fitting in (a)?
+
+```{r}
+round(cor(seatpos), 2)
+```
+
+We see that `Ht` and `HtShoes` are perfectly correlated. `Weight` and `Ht` (and `HtShoes`), `Weight` and `Seated`, `Weight` and `Leg`, `Seated` and `Ht`, `Leg` and `Ht` are all highly positively correlated. `Ht` and `Hipcenter` are highly negatively correlated. Outside of `Age`, `Ht` appears to be the most highly correlated variable against all other variables.
+
+### c. Conduct a PCA transformation on all predictors. How much variance the first two PCs have?
+
+```{r}
+pr.out <- prcomp(seatpos[,1:8], scale = TRUE)
+summary(pr.out)
+```
+
+The proportion of variance for the first two principal components is 0.7091 for PC1 and 0.1546 for PC2. The variance lowers significantly for all other principal components.
+
+### d. Show the linear combination coefficients in the first two PCs. Based on those coefficients, what interpretation can you make for the first two PCs?
+
+```{r}
+phi <- pr.out$rotation[, 1:2]
+phi
+```
+
+In PC1 we can see that all coefficients aside from `Age` are weighted nearly the same, whereas in PC2 `Age` is weighted highly compared to the other coefficients which are weighted differently than PC1's coefficients with `Arm` being the exception. Another thing to note is that all of PC1's coefficients are negative whereas PC2's coefficients are a mix of positive and negative values.
+
+### e. Conduct a PCA regression of hipcenter vs. first two PCs. How do you interpret this model result? Compare this model with the regular linear regression in (a) and give your insight.
+
+```{r}
+Z <- pr.out$x
+seatpos.pca <- data.frame(Z[, 1:2], hipcenter = seatpos$hipcenter)
+model.pca <- lm(hipcenter ~ ., seatpos.pca)
+summary(model.pca)
+```
+
+In this model we notice an increase in adjusted r-squared and both coefficients PC1 and PC2 are significant.
+
+### Question 3: Take the fat data, and use the percentage of body fat, siri, as the response and the other variables, except brozek and density, as potential predictors. Remove every tenth observation from the data for use as the test set (1, 11, 21, …). Use the remaining data as the training data building the following models, predict on the test set, and calculate the prediction RMSE on the test set.
+
+```{r}
+fat <- read.csv("fat.csv")
+train <- fat[-seq(1, nrow(fat), 10), ]
+test <- fat[seq(1, nrow(fat), 10), ]
+train <- train[, !names(train) %in% c('brozek', 'density')]
+test <- test[, !names(test) %in% c('brozek', 'density')]
+RMSEs <- c()
+head(train)
+```
+
+### a. Linear regression with all predictors.
+
+```{r}
+lm.model <- lm(siri ~ ., data = train)
+yhat <- predict(lm.model, test)
+RMSEs[1] <- sqrt(mean((yhat - test$siri)^2))
+RMSEs[1]
+```
+
+### b. Linear regression with variables selected using backward AIC (hint: consider step function).
+
+```{r}
+step(lm.model, direction = "backward")
+```
+
+```{r}
+aic.model <- lm(siri ~ weight + adipos + free + chest + abdom + thigh + ankle + 
+    biceps + forearm, data = train)
+yhat <- predict(aic.model, test)
+RMSEs[2] <- sqrt(mean((yhat - test$siri)^2))
+RMSEs[2]
+```
+
+
+### c. Principal component regression. Use the first 7 PCs.
+
+```{r}
+pr.out <- prcomp(train[,2:16], scale = TRUE)
+phi <- pr.out$rotation
+
+PVE.matrix <- summary(pr.out)$importance
+PVE <- PVE.matrix[2,]
+plot(PVE, xlab='Principle Component', ylab='Proportion of Variance Explained', cex.lab=1.5)
+abline(a=PVE[10], b=0)
+text(x=20, y=0.04, labels='Elbow point 10 PCs', cex=1.5)
+```
+
+```{r}
+pca.train <- data.frame(pr.out$x[, 1:7], siri = train$siri)
+pca.test <- predict(pr.out, test)
+pca.test <- data.frame(pca.test[, 1:7], siri = test$siri)
+pcr.model <- lm(siri ~ ., data = pca.train)
+yhat <- predict(pcr.model, pca.test)
+RMSEs[3] <- sqrt(mean((yhat - pca.test$siri)^2))
+RMSEs[3]
+```
+
+
+### d. Ridge regression. Use cross-validation on the training set to select best penalty
+
+```{r}
+require(MASS)
+rg.model <- lm.ridge(siri ~ ., data = train, lambda = seq(0, 5e-8, len=21))
+which.min(rg.model$GCV)
+```
+
+```{r}
+yhat <- cbind(1,as.matrix(test[,-1])) %*% coef(rg.model)[21,]
+RMSEs[4] <- sqrt(mean((yhat - test$siri)^2))
+RMSEs[4]
+```
+
+### e. Lasso. Use cross-validation on the training set to select best penalty.
+
+```{r}
+require(lars)
+las.model <- lars(as.matrix(train[,2:16]),train$siri)
+set.seed(2022)
+cvout <- cv.lars(as.matrix(train[,2:16]),train$siri)
+cvout$index[which.min(cvout$cv)]
+```
+
+```{r}
+yhat <- predict(las.model, as.matrix(test[,2:16]), s=0.8080808,mode="fraction")
+RMSEs[5] <- sqrt(mean((yhat$fit - test$siri)^2))
+RMSEs[5]
+```
+
+
+### f. Compare all the RMSEs. Are you surprised on the model performance comparison? Give you speculation about why you see such result.
+
+```{r}
+library(knitr)
+table <- data.frame(
+  c("Linear", "AIC", "PCA", "Ridge", "Lasso"), RMSEs
+)
+kable(table, format = "markdown", col.names = c("Regression", "RMSE"))
+```
+
+The most suprising model result is the AIC model, typically you would expect with a reduction of insignificant variables we would attain a better model but that does not appear to be the case. The PCA model having a higher RMSE makes sense because although we have a moderate amount of variables, it wouldn't be considered high dimensional data.
+
+```{r}
+round(cor(train[, 2:16]), 2)
+```
+We can still see in our correlation matrix that we do have quite a few correlated variables too, so PCA isn't a bad option for this model, but if we are only looking at RMSE it performs the worst.
+
+Both Ridge and LASSO performed well, however it appears that Ridge performed exactly the same as our normal linear regression model. Which means out original model didn't suffer from any kind of overfitting (relative to ridge). Our LASSO model performed the best, which could mean that the L1 penalty introduced in LASSO made more of a difference.
+

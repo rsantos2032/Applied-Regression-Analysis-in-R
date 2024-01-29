@@ -1,0 +1,311 @@
+---
+title: "Homework 3"
+author: "Rolando Santos"
+date: "2023-10-13"
+output: pdf_document
+---
+
+```{r setup, include = FALSE, message = FALSE}
+library(knitr)
+library(tidyverse)
+library(readr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Question 1: In this question, we will use the prostate dataset. Import this dataset and answer following questions. 
+
+```{r}
+prostate <- read.csv("prostate.csv")
+head(prostate)
+```
+```{r}
+lm.model <- lm(lpsa ~ ., data = prostate)
+summary(lm.model)
+```
+
+### a. Compute a 95% CI for the parameter associated with age. Use the manual method.
+
+```{r}
+#95% CI for age
+-0.019637 + c(-1,1) * qnorm(0.975) * 0.011173
+```
+
+```{r}
+confint(lm.model, level = 0.95)
+```
+
+### b. Compute a 90% CI for the parameter associated with age. Use the manualmethod.
+
+```{r}
+#90% CI for age
+-0.019637 + c(-1,1) * qnorm(0.95) * 0.011173
+```
+
+
+
+```{r}
+confint(lm.model, level = 0.90)
+```
+### c. Based on these two CIs, what can we expect the p-value of this parameter in t-test? Compare your conclusion with the p-value output by summary function.
+
+```{r}
+se <- (0.002261678 - (-0.041535678))/(2 * 1.96)
+z <- -0.019637/se
+2*pnorm(-abs(z))
+```
+
+```{r}
+se <- (-0.00125905 - (-0.03801495))/(2 * 1.645)
+z <- -0.019637/se
+2*pnorm(-abs(z))
+```
+
+The p-value we get from either CI is ~0.0788. This is close to the p-value from the summary function 0.08229. This indicates that age is not significant.
+
+### d. Conduct a permutation t-test for predictor age in this model.
+
+```{r}
+set.seed(408)
+T.original <- abs(summary(lm.model)$coef[4,3])
+
+Ts <- c()
+for (i in 1:10000){
+  lm.model.sample <- lm(lpsa ~ lcavol + lweight + sample(age) + 
+                          lbph + svi + lcp + gleason + pgg45, data = prostate)
+  Ts[i] <-  abs(summary(lm.model.sample)$coef[4,3])
+}
+
+p.value <- mean(Ts >= T.original)
+p.value
+```
+
+Our p-value from our permutation t-test is 0.084 which is close to the one from our summary function 0.08229.
+
+### e. Remove all the predictors not significant at the 5% level. Use anova function to conduct an F test to test this model against the original full model. Which modelis preferred? Give your reason.
+
+```{r}
+lm.model.sig <- lm(lpsa ~ lcavol + lweight + svi, data = prostate)
+summary(lm.model.sig)
+```
+```{r}
+anova( lm.model.sig, lm.model)
+```
+We can see that our p-value is not significant. This means that the more complex model is not any better than our small model, thus the smaller model should be used instead. 
+
+### Question 2: In this question, we will use the cheddar dataset. Import this dataset and answer following questions. 
+
+```{r}
+cheddar <- read.csv("cheddar.csv")
+head(cheddar)
+```
+
+
+### a. Fit a regression model with taste as the response and the three chemical contents as predictors. Identify the predictors that are statistically significant at the 5% level.
+
+```{r}
+lm.model <- lm(taste ~ Acetic + H2S + Lactic, data = cheddar)
+summary(lm.model)
+```
+
+In our model based on the p-values, H2S and Lactic predictors are statistically significant at the 5% level, where H2S (0.00425 < 0.05) and Lactic (0.03108 < 0.05).
+
+### b. Acetic and H2S are measured on a log scale. Fit a linear model where all three predictors are measured on their original scale. Identify the predictors that are statistically significant at the 5% level for this model. Hint: exponential function is exp().
+
+```{r}
+exp.model <- lm(taste ~ exp(Acetic) + exp(H2S) + Lactic, data = cheddar)
+summary(exp.model)
+```
+We see now that only Lactic is significant at the 5% level (0.0105 < 0.05).
+
+### c. Can we use an F-test to compare these two models? Which model provides a better fit to the data? Explain your reasoning for these two questions.
+
+An F-test cannot be used to compare the two models since neither models are a subset of the other. The original linear model is better based on the r-squared value (0.6518) compared to the model with exponents (0.5754).
+
+### d. If H2S is increased 0.01 for the model used in (a), what change in the taste would be expected?
+
+```{r}
+set.seed(408)
+adjust.H2S <- function(sample.index, data = cheddar, lm.model){
+  line.break <- paste("\n")
+  sample.row <- cheddar[sample.index, ]
+  ret <- paste("Acetic value:", sample.row[, 2], 
+               "H2S Value:", sample.row[, 3], 
+               "Lactic value:", sample.row[, 4], 
+               "Taste Value", sample.row[, 1], sep = "\n")
+  cat(ret)
+  sample.row$taste <- NULL
+  sample.row <- as.matrix(cbind(intercept = 1, sample.row))
+  
+  beta.hat <- as.matrix(lm.model$coefficients)
+  y.original <- (sample.row) %*% beta.hat
+
+  cat(line.break)
+  cat(line.break)
+  ret <- paste("Response:", y.original, sep = "\n")
+  cat(ret)
+  
+  sample.row.updated <- cheddar[sample.index, ]
+  sample.row.updated$H2S <- sample.row.updated$H2S + 0.01
+  sample.row.updated$taste <- NULL
+  sample.row.updated <- as.matrix(cbind(intercept = 1, sample.row.updated))
+
+  y.new <- (sample.row.updated) %*% beta.hat
+  
+  cat(line.break)
+  cat(line.break)
+  ret <- paste("New Response:", y.new, sep = "\n")
+  cat(ret)
+  
+  cat(line.break)
+  cat(line.break)
+  ret <- paste("Difference:", y.new - y.original, sep = "\n")
+  cat(ret)
+}
+```
+
+```{r}
+adjust.H2S(sample.index = sample(nrow(cheddar), 1), lm.model = lm.model)
+```
+
+```{r}
+adjust.H2S(sample.index = sample(nrow(cheddar), 1), lm.model = lm.model)
+```
+
+We can see that by changing the H2S value by 0.01, we get a ~0.0391 difference between the responses.
+
+### Question 3: In this question, we will use the teengamb dataset. Import this dataset and answer following questions.
+
+```{r}
+teengamb <- read.csv("teengamb.csv")
+head(teengamb) 
+```
+
+
+### a. Fit a model with gamble as the response and the other variables as predictors. Which variables are statistically significant at the 5% level? 
+
+```{r}
+lm.model <- lm(gamble ~ ., data = teengamb)
+summary(lm.model)
+```
+
+In our model sex is significant at the 5% level and income is significant at the 0.1% level.
+
+### b. Check the meaning of each variable. Does the variable significance in (a) make sense? Give your reasoning.
+
+For sex the variables are either 0 (for males) and 1 (for females), this means that the gambling habits differ between both genders. The income level makes sense as well, we could deduce that the gambling habits may differ amongst teenagers that have a flow of income vs. those that do not.
+
+### c. Fit a model with just income as a predictor and use an F-test to compare it to the full model.
+
+```{r}
+lm.model.income <- lm(gamble ~ income, data = teengamb)
+summary(lm.model.income)
+```
+
+```{r}
+anova(lm.model.income, lm.model)
+```
+We can see by the significance of the p-value (0.01177) that we do have enough evidence to reject the null hypothesis and that the complex model is a better fit than the model with just income.
+
+### Question 4: In this question, we will use the sat dataset. It was collected to study the relationship between expenditures on public education and test results.
+
+### Using the sat dataset, fit a linear model with the total SAT score as the response and expend, salary, ratio, and takers as predictors. Perform regression diagnostics on this model to answer the following questions. Display any plots that are relevant. Some questions may be subjective. Show the most valid judgment and give your seasons.
+
+```{r}
+sat <- read.csv("sat.csv")
+head(sat) 
+```
+```{r}
+lm.model <- lm(total ~ expend + salary + ratio + takers, data = sat)
+summary(lm.model)
+```
+
+### a. Plot residual vs. fitted response to check the constant variance assumption for the errors.
+
+```{r}
+plot(lm.model$residuals ~ lm.model$fitted.values, xlab='yhat', ylab='residue')
+abline(h=0)
+```
+
+The data is scattered and shows non-linearity with the residuals, the data doesn't necessarily show any strong outliers. 
+
+### b. Use Q-Q plot to check the normality assumption. What is the shape of the error distribution?
+
+```{r}
+qqnorm(lm.model$residuals)
+qqline(lm.model$residuals)
+```
+
+From the Q-Q plot we can see that most of the values lie on the line, we can deduce that the data is normally distributed.
+
+### c. Use studentized residuals to check the outliers. Set the cutoff of being “large” as the 5% critical value in t distribution. Note that we need to consider the two sides.
+
+```{r}
+n <- dim(sat)[1]
+df <- n - dim(sat)[2] - 1
+sr <- rstudent(lm.model)
+sr
+```
+```{r}
+sr[which(abs(sr) > qt(0.975, df))]
+```
+
+We can see that we have 4 outliers, if we take a glance at all the studentized residuals we can see that it makes sense that these 4 outliers are farthest apart from the average data point.
+
+### d. Using defbeta function to plot the change of parameter estimation and check influential points. Check influential points in terms of each parameter except the intercept.
+
+```{r}
+beta.change <- dfbeta(lm.model)
+plot(beta.change[,2], ylab = "expend")
+abline(h=0)
+plot(beta.change[,3], ylab = "salary")
+abline(h=0)
+plot(beta.change[,4], ylab = "ratio")
+abline(h=0)
+plot(beta.change[,5], ylab = "takers")
+abline(h=0)
+```
+
+We can see in the ratio, salary, and expend plots we have a single point that has a large amount of influence, in the takers plot we have multiple but they are not too far off from the line to be as influential as the ones in the other plots.
+
+### Question 5:  The divusa dataset records the US divorce and social-economic variables in 77 years. 
+
+### Fit a model with divorce as the response and the other variables, except year, as predictors. Check for error correlation using three methods: plot residuals vs. years; plot residual (t+1) vs. residual (t); fit a linear model of residual (t+1) ~ residual (t). Give your insight and conclusion.
+
+```{r}
+divusa <- read.csv("divusa.csv")
+head(divusa) 
+```
+
+```{r}
+lm.model <- lm(divorce ~ unemployed + femlab + marriage + birth + 
+                 military, data = divusa)
+summary(lm.model)
+```
+```{r}
+#Plot of Residuals vs. Years
+plot(lm.model$residuals ~ year, na.omit(divusa), ylab="Residuals")
+abline(h=0)
+```
+
+```{r}
+#Plot of Residuals (t+1) vs. Residuals (t)
+n <- dim(divusa)[1]
+plot(tail(lm.model$residuals, n-1) ~ head(lm.model$residuals, n-1),
+     xlab = "e_i", ylab = "e_i+1")
+```
+
+```{r}
+cor(tail(lm.model$residuals, n-1), head(lm.model$residuals, n-1))
+```
+
+```{r}
+#Linear Model of Residuals (t+1) ~ Residuals (t)
+lm.residuals <- lm(tail(lm.model$residuals, n-1) ~ head(lm.model$residuals, n-1) )
+summary(lm.residuals)
+```
+
+From the residuals vs. years plot we can see that there is a positive serial correlation (residuals are followed, in time, by other residuals of the same sign and about the same magnitude) between the residuals. 
+
+The plot of residuals (t+1) vs. residuals (t) indicates a positive correlation between residuals at this time point.
+
+The model shows a 0.1% significance between of predictor residuals $\epsilon_i$ for response $\epsilon_{i+1}$.
